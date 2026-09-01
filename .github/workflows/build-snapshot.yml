@@ -94,8 +94,19 @@ jobs:
 
       - name: Download and extract OpenWrt Snapshot SDK
         run: |
-          wget "https://openwrt.org" -O sdk.tar.xz
+          set -euo pipefail
+          
+          # Разделяем адрес на части, чтобы обойти скрытый парсер переменных GitHub
+          PART1="https://downloads.openwrt.org"
+          PART2="/snapshots/targets/mediatek/filogic"
+          PART3="/openwrt-sdk-mediatek-filogic_snapshot_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
+          
+          # Собираем ссылку в чистом Bash без явного написания URL в одну строку
+          FULL_URL="${PART1}${PART2}${PART3}"
+          
+          wget "$FULL_URL" -O sdk.tar.xz
           tar -xf sdk.tar.xz
+
 
       - name: Configure Snapshot SDK
         if: steps.existing.outputs.result != 'true'
