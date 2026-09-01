@@ -97,20 +97,19 @@ jobs:
         run: |
           set -euo pipefail
           
-          # Исправлено: Очищаем возможный конфликт глобального окружения
-          unset SDK_URL
+          # Используем уникальные изолированные имена, никак не связанные со старыми переменными
+          DOWNLOAD_LINK="https://openwrt.org"
+          ARCHIVE_NAME="openwrt-sdk-mediatek-filogic_snapshot.tar.xz"
           
-          # Исправлено: Указываем точный архивный путь к SDK
-          TARGET_URL="https://openwrt.org"
-          SDK_FILE="openwrt-sdk-mediatek-filogic_snapshot.tar.xz"
-          
-          wget -O "$SDK_FILE" "$TARGET_URL"
+          # Скачиваем файл напрямую
+          wget -O "$ARCHIVE_NAME" "$DOWNLOAD_LINK"
 
-          case "$SDK_FILE" in
-            *.tar.zst) tar --zstd -xf "$SDK_FILE" ;;
-            *.tar.xz) tar -xf "$SDK_FILE" ;;
-            *) echo "Unsupported SDK archive: $SDK_FILE"; exit 1 ;;
+          case "$ARCHIVE_NAME" in
+            *.tar.zst) tar --zstd -xf "$ARCHIVE_NAME" ;;
+            *.tar.xz) tar -xf "$ARCHIVE_NAME" ;;
+            *) echo "Unsupported SDK archive: $ARCHIVE_NAME"; exit 1 ;;
           esac
+
 
       - name: Configure Snapshot SDK
         if: steps.existing.outputs.result != 'true'
