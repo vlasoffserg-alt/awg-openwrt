@@ -93,23 +93,9 @@ jobs:
           key: ${{ runner.os }}-snapshot-sdk-${{ matrix.build_env.revision }}-${{ matrix.build_env.target }}-${{ matrix.build_env.subtarget }}-${{ matrix.build_env.vermagic }}
 
       - name: Download and extract OpenWrt Snapshot SDK
-        if: steps.existing.outputs.result != 'true' && steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
-          set -euo pipefail
-          
-          # Используем уникальные изолированные имена, никак не связанные со старыми переменными
-          DOWNLOAD_LINK="https://openwrt.org"
-          ARCHIVE_NAME="openwrt-sdk-mediatek-filogic_snapshot.tar.xz"
-          
-          # Скачиваем файл напрямую
-          wget -O "$ARCHIVE_NAME" "$DOWNLOAD_LINK"
-
-          case "$ARCHIVE_NAME" in
-            *.tar.zst) tar --zstd -xf "$ARCHIVE_NAME" ;;
-            *.tar.xz) tar -xf "$ARCHIVE_NAME" ;;
-            *) echo "Unsupported SDK archive: $ARCHIVE_NAME"; exit 1 ;;
-          esac
-
+          wget "https://openwrt.org" -O sdk.tar.xz
+          tar -xf sdk.tar.xz
 
       - name: Configure Snapshot SDK
         if: steps.existing.outputs.result != 'true'
