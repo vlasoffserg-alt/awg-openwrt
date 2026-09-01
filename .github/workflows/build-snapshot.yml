@@ -96,16 +96,18 @@ jobs:
         run: |
           set -euo pipefail
           
-          # Разделяем адрес на части, чтобы обойти скрытый парсер переменных GitHub
-          PART1="https://downloads.openwrt.org"
-          PART2="/snapshots/targets/mediatek/filogic"
-          PART3="/openwrt-sdk-mediatek-filogic_snapshot_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
+          # Разрезаем актуальный URL на куски, чтобы защититься от автозамен GitHub Actions
+          HOST_URL="https://downloads.openwrt.org"
+          TARGET_PATH="/snapshots/targets/mediatek/filogic"
+          FILE_NAME="/openwrt-sdk-mediatek-filogic_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
           
-          # Собираем ссылку в чистом Bash без явного написания URL в одну строку
-          FULL_URL="${PART1}${PART2}${PART3}"
+          CURRENT_SNAPSHOT_URL="${HOST_URL}${TARGET_PATH}${FILE_NAME}"
           
-          wget "$FULL_URL" -O sdk.tar.xz
-          tar -xf sdk.tar.xz
+          # Скачиваем SDK актуального Snapshot
+          wget "$CURRENT_SNAPSHOT_URL" -O sdk.tar.zst
+          
+          # Распаковываем ZSTD архив
+          tar --zstd -xf sdk.tar.zst
 
 
       - name: Configure Snapshot SDK
