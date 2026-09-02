@@ -1,8 +1,19 @@
 name: Build OpenWrt Snapshot
 
 on:
+  schedule:
+    # Every third day of the month at 21:17 UTC (01:17 in Europe/Samara).
+    - cron: "17 21 */3 * *"
   workflow_dispatch:
-    # Запуск теперь ручной, параметры зафиксированы внутри
+    inputs:
+      targets:
+        description: "Snapshot targets, comma-separated; empty means all"
+        required: false
+        type: string
+      subtargets:
+        description: "Snapshot subtargets, comma-separated; empty means all"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -12,22 +23,71 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: "611fea61ac - mediatek/filogic"
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.inputs.outputs.targets }}
+      subtargets: ${{ steps.inputs.outputs.subtargets }}
+    steps:
+      - name: Prepare target filters
+        id: inputs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_TARGETS: ${{ inputs.targets }}
+          MANUAL_SUBTARGETS: ${{ inputs.subtargets }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TARGET_FILTERS="$MANUAL_TARGETS"
+            SUBTARGET_FILTERS="$MANUAL_SUBTARGETS"
+          else
+            TARGET_FILTERS=""
+            SUBTARGET_FILTERS=""
+          fi
+
+          if { [ -z "$TARGET_FILTERS" ] && [ -n "$SUBTARGET_FILTERS" ]; } || \
+             { [ -n "$TARGET_FILTERS" ] && [ -z "$SUBTARGET_FILTERS" ]; }; then
+            echo "Set both target and subtarget filters, or leave both empty to build all platforms."
+            exit 1
+          fi
+
+          echo "targets=$TARGET_FILTERS" >> "$GITHUB_OUTPUT"
+          echo "subtargets=$SUBTARGET_FILTERS" >> "$GITHUB_OUTPUT"
+
+  discover:
+    runs-on: ubuntu-latest
+    needs: prepare
+    outputs:
+      job-config: ${{ steps.config.outputs.job-config }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Discover current Snapshot builds
+        id: config
+        env:
+          TARGETS: ${{ needs.prepare.outputs.targets }}
+          SUBTARGETS: ${{ needs.prepare.outputs.subtargets }}
+        run: node snapshot-index.js "$TARGETS" "$SUBTARGETS"
+
+  build:
+    name: "${{ matrix.build_env.revision }} - ${{ matrix.build_env.target }}/${{ matrix.build_env.subtarget }}"
+    runs-on: ubuntu-latest
+    needs: discover
     strategy:
       fail-fast: false
       matrix:
-        build_env:
-          - target: "mediatek"
-            subtarget: "filogic"
-            revision: "r36948-611fea61ac"
-            vermagic: "e681dd05ce0396defcfaedcdb36af8cc"
-            releaseTag: "manual-611fea61ac"
-            artifactPostfix: "611fea61ac_mediatek_filogic"
-            sdkFile: "openwrt-sdk-mediatek-filogic_snapshot.tar.zst"
-            # Исправлено: ссылка на архивный Snapshot коммита 611fea61ac
-            sdkUrl: "https://openwrt.org"
+        build_env: ${{ fromJson(needs.discover.outputs.job-config) }}
 
     steps:
       - name: Check whether this Snapshot ABI is already published
@@ -93,22 +153,19 @@ jobs:
           key: ${{ runner.os }}-snapshot-sdk-${{ matrix.build_env.revision }}-${{ matrix.build_env.target }}-${{ matrix.build_env.subtarget }}-${{ matrix.build_env.vermagic }}
 
       - name: Download and extract OpenWrt Snapshot SDK
+        if: steps.existing.outputs.result != 'true' && steps.cache-sdk.outputs.cache-hit != 'true'
+        env:
+          SDK_FILE: ${{ matrix.build_env.sdkFile }}
+          SDK_URL: ${{ matrix.build_env.sdkUrl }}
         run: |
           set -euo pipefail
-          
-          # Разрезаем актуальный URL на куски, чтобы защититься от автозамен GitHub Actions
-          HOST_URL="https://downloads.openwrt.org"
-          TARGET_PATH="/snapshots/targets/mediatek/filogic/"
-          FILE_NAME="/openwrt-sdk-mediatek-filogic_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
-          
-          CURRENT_SNAPSHOT_URL="${HOST_URL}${TARGET_PATH}${FILE_NAME}"
-          
-          # Скачиваем SDK актуального Snapshot
-          wget "$CURRENT_SNAPSHOT_URL" -O sdk.tar.zst
-          
-          # Распаковываем ZSTD архив
-          tar --zstd -xf sdk.tar.zst
+          wget -O "$SDK_FILE" "$SDK_URL"
 
+          case "$SDK_FILE" in
+            *.tar.zst) tar --zstd -xf "$SDK_FILE" ;;
+            *.tar.xz) tar -xf "$SDK_FILE" ;;
+            *) echo "Unsupported SDK archive: $SDK_FILE"; exit 1 ;;
+          esac
 
       - name: Configure Snapshot SDK
         if: steps.existing.outputs.result != 'true'
@@ -136,10 +193,6 @@ jobs:
             echo "CONFIG_PACKAGE_luci-i18n-amneziawg-ru=y"
           } > .config
           make defconfig
-
-          # Инъекция вашего точного vermagic в процесс сборки SDK
-          echo "${{ matrix.build_env.vermagic }}" > .vermagic
-          sed -i "s/grep 'get_vermagic'/cat .vermagic #/g" include/kernel-defaults.mk
 
       - name: Build AmneziaWG packages
         if: steps.existing.outputs.result != 'true'
@@ -180,8 +233,74 @@ jobs:
           copy_package "luci-i18n-amneziawg-ru" "$SDK_DIR/bin/packages"
           copy_package "kmod-amneziawg" "$SDK_DIR/bin/targets"
 
-      - name: Upload Finished Artifacts
+          ls -la awgrelease/
+
+      - name: Upload Snapshot packages for publishing
+        if: steps.existing.outputs.result != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: amneziawg-mediatek-filogic-${{ matrix.build_env.revision }}
-          path: awgrelease/
+          name: snapshot-packages-${{ matrix.build_env.revision }}-${{ matrix.build_env.target }}-${{ matrix.build_env.subtarget }}
+          path: awgrelease/*.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    name: Publish Snapshot prereleases
+    runs-on: ubuntu-latest
+    needs: [discover, build]
+    if: always() && needs.discover.result == 'success'
+    steps:
+      - name: Download newly built Snapshot packages
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: snapshot-packages-*
+          path: snapshot-artifacts
+          merge-multiple: true
+
+      - name: Publish packages grouped by Snapshot revision
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          assets=(snapshot-artifacts/*.apk)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No new Snapshot packages to publish."
+            exit 0
+          fi
+
+          declare -A release_tags=()
+          for asset in "${assets[@]}"; do
+            asset_name=$(basename "$asset")
+            artifact_postfix="${asset_name#*_}"
+            release_tag="${artifact_postfix%%_*}"
+            release_tags["$release_tag"]=1
+          done
+
+          while IFS= read -r release_tag; do
+            revision="${release_tag#snapshot-}"
+            release_assets=()
+
+            for asset in "${assets[@]}"; do
+              case "$(basename "$asset")" in
+                *_"${release_tag}"_*.apk) release_assets+=("$asset") ;;
+              esac
+            done
+
+            if ! gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release create "$release_tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --target "$GITHUB_SHA" \
+                --title "OpenWrt Snapshot $revision" \
+                --notes "Automated AmneziaWG packages for OpenWrt Snapshot $revision. Select assets matching the exact target, subtarget and kernel ABI of the installed Snapshot." \
+                --prerelease
+            fi
+
+            gh release upload "$release_tag" "${release_assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          done < <(printf '%s\n' "${!release_tags[@]}" | sort)
