@@ -21,7 +21,7 @@ jobs:
         build_env:
           - target: "mediatek"
             subtarget: "filogic"
-            revision: "611fea61ac"
+            revision: "r36948-611fea61ac"
             vermagic: "e681dd05ce0396defcfaedcdb36af8cc"
             releaseTag: "manual-611fea61ac"
             artifactPostfix: "611fea61ac_mediatek_filogic"
