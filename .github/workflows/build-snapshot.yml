@@ -97,9 +97,9 @@ jobs:
           set -euo pipefail
           
           # Разрезаем актуальный URL на куски, чтобы защититься от автозамен GitHub Actions
-          HOST_URL="https://archive.openwrt.org"
-          TARGET_PATH="/releases/25.12.5/targets/mediatek/filogic"
-          FILE_NAME="/openwrt-sdk-25.12.5-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          HOST_URL="https://downloads.openwrt.org"
+          TARGET_PATH="/snapshots/targets/mediatek/filogic/"
+          FILE_NAME="/openwrt-sdk-mediatek-filogic_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
           
           CURRENT_SNAPSHOT_URL="${HOST_URL}${TARGET_PATH}${FILE_NAME}"
           
