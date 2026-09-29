@@ -3,7 +3,7 @@ name: Build OpenWrt Snapshot
 on:
   schedule:
     # Every third day of the month at 21:17 UTC (01:17 in Europe/Samara).
-    - cron: "17 21 */3 * *"
+    - cron: "17 21 */10 * *"
   workflow_dispatch:
     inputs:
       targets:
