@@ -6,8 +6,8 @@ English | [Russian](README.md)
 ![AmneziaWG3.0](https://img.shields.io/badge/AmneziaWG-3.0-orange)
 ![AmneziaWG3.1](https://img.shields.io/badge/AmneziaWG-3.1-red)
 
-![OpenWrt 24](https://img.shields.io/badge/OpenWrt-24.10.4_~_24.10.8-blue)
-![OpenWrt 25](https://img.shields.io/badge/OpenWrt-25.12.0_~_25.12.5-teal)
+![OpenWrt 24](https://img.shields.io/badge/OpenWrt-24.10.0_~_24.10.8-blue)
+![OpenWrt 25](https://img.shields.io/badge/OpenWrt-25.12.0_~_25.12.6-teal)
 
 [![AmneziaWG OpenWrt Feed](https://img.shields.io/badge/AmneziaWG-OpenWrt_Feed-yellow?style=for-the-badge&logo=openwrt)](https://2grey.github.io/awg-openwrt)
 
@@ -15,7 +15,7 @@ English | [Russian](README.md)
 
 The `master` branch contains an aligned set of AWG 3.1 components:
 
-- `kmod-amneziawg` — `v3.1.20260828`;
+- `kmod-amneziawg` — `v3.1.20261113-02`;
 - `amneziawg-tools` — `v3.1.20260812`;
 - `luci-proto-amneziawg` — `v3.1.1` — Web interface and import/export of AWG 3.1 configurations.
 
@@ -34,6 +34,8 @@ When using `HeaderProtectionKey`, the `S1-S4` parameters must be at least 12.
 ## Custom package feed (GitHub Pages)
 
 This repository also publishes a full-featured [OpenWrt package feed](https://2grey.github.io/awg-openwrt/) with signed IPK repositories for OpenWrt 24.x and signed APK repositories for OpenWrt 25.x and later.
+
+[How to upgrade OpenWrt 24.10 or 25.12 using our ASU server](docs/attended-sysupgrade.en.md)
 
 ## Installation
 
@@ -56,14 +58,22 @@ This repository also publishes a full-featured [OpenWrt package feed](https://2g
    configuration is not removed.
 
 2. Reboot the router to load the new kernel modules.
-3. Hard-refresh LuCI (`Ctrl+F5`) or open it in a private browser window.
+3. Clear the browser cache for LuCI JavaScript: hard-refresh the page
+   (`Ctrl+F5`) or open LuCI in a private browser window. A regular page reload
+   may not be sufficient.
 4. Create a new interface using the `AmneziaWG VPN` protocol.
 
 ### Via the setup script
 
 If you only need to install the packages, use the `amneziawg-install` script. It automatically downloads the packages for your device from this repository and also offers to configure an interface using the AmneziaWG protocol.
 
-If you accept, enter the configuration parameters requested by the script. The script creates the interface, configures its firewall rules, and enables routing for the addresses in `AllowedIPs`. By default, this routes all IPv4 and IPv6 traffic through the tunnel by enabling **Route Allowed IPs** in the peer settings.
+If another `awg-openwrt` feed is configured (including one for an older OpenWrt
+version), the script shows its URL and offers to abort installation, overwrite
+the feed with the current 2Grey URL and install its signing key, or continue
+without changes. Installation is aborted by default. If you continue, all
+configured feeds undergo the usual availability check.
+
+If you agree to configure an interface, enter the configuration parameters requested by the script. The script creates the interface, configures its firewall rules, and enables routing for the addresses in `AllowedIPs`. By default, this routes all IPv4 and IPv6 traffic through the tunnel by enabling **Route Allowed IPs** in the peer settings.
 
 To run the script, connect to the router via SSH, enter the following command, and follow the on-screen instructions:
 
@@ -71,9 +81,43 @@ To run the script, connect to the router via SSH, enter the following command, a
 sh <(wget -O - https://raw.githubusercontent.com/2Grey/awg-openwrt/refs/heads/master/amneziawg-install.sh)
 ```
 
+If a GitHub Releases package download fails, the installer automatically tries
+`ghproxy.net`, `ghfast.top`, `gh-proxy.com`, and `gh-proxy.org`, in that order.
+For each package, all sources are tried with the current package manager's
+extension (`.apk` or `.ipk`) before trying the alternate extension.
+Each attempt has a 20-second response timeout.
+
+Set the optional `AWG_GITHUB_PROXY` environment variable to an HTTP(S) URL prefix
+to try your own mirror **before direct GitHub downloads**. If it fails, the
+installer continues through the other sources. The full GitHub URL is appended
+to the prefix, for example
+`https://ghfast.top/https://github.com/2Grey/awg-openwrt/releases/download/...`.
+This is a GitHub mirror service URL, rather than an HTTP CONNECT/SOCKS proxy.
+
+For an already downloaded script:
+
+```sh
+AWG_GITHUB_PROXY='https://ghfast.top/' sh amneziawg-install.sh
+```
+
+If the script itself cannot be downloaded directly, fetch it through a mirror
+and then run it with the variable:
+
+```sh
+wget -O /tmp/amneziawg-install.sh \
+  'https://ghfast.top/https://raw.githubusercontent.com/2Grey/awg-openwrt/refs/heads/master/amneziawg-install.sh' &&
+AWG_GITHUB_PROXY='https://ghfast.top/' sh /tmp/amneziawg-install.sh
+```
+
+The variable only affects this installer's GitHub Releases package downloads.
+Feed checks by `apk`/`opkg` use their configured URLs. Public mirrors are operated
+by third parties; availability depends on your network.
+
 > [!IMPORTANT]
 > On a clean installation, the script can load the kernel module and configure the interface without a reboot.
 > If an older kernel module remains loaded after an upgrade, reboot the router and run the script again.
+> After updating the packages, also clear the browser cache for LuCI JavaScript:
+> hard-refresh the page (`Ctrl+F5`) or open LuCI in a private browser window.
 
 Additional script options:
 
@@ -128,6 +172,7 @@ Open the release page for your OpenWrt version and use your browser's page searc
 
 #### Supported OpenWrt versions
 
+1. [25.12.6](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.6) – AWG-3.1
 1. [25.12.5](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.5) – AWG-3.1
 2. [25.12.4](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.4) – AWG-3.1
 3. [25.12.3](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.3) – AWG-3.1
@@ -139,6 +184,10 @@ Open the release page for your OpenWrt version and use your browser's page searc
 9. [24.10.6](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.6) – AWG-3.1
 10. [24.10.5](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.5) – AWG-3.1
 11. [24.10.4](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.4) – AWG-3.1
+12. [24.10.3](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.3) – AWG-3.1
+13. [24.10.2](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.2) – AWG-3.1
+14. [24.10.1](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.1) – AWG-3.1
+15. [24.10.0](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.0) – AWG-3.1
 
 ## Building packages
 
@@ -176,6 +225,8 @@ The current AWG 3.1 stack, which is compatible with AWG 2.0 and 3.0 connection p
 The **Build OpenWrt Snapshot** workflow checks the current OpenWrt Snapshot revision and kernel ABI, builds APK packages, and publishes them as a prerelease. If all four packages for that revision, platform, and ABI have already been published, the duplicate build is skipped.
 
 To start it manually, open **Actions → Build OpenWrt Snapshot → Run workflow**. Leave `target` and `subtarget` empty to build every available platform. To run a selective build, provide both comma-separated lists.
+
+Enable **force_rebuild** to rebuild packages even if they are already published for the current revision and ABI, for example after updating AmneziaWG. Existing APK assets in the matching prerelease will be replaced. This option is disabled by default; scheduled builds still skip already published package sets. For GL-MT6000, use `targets: mediatek` and `subtargets: filogic`.
 
 The workflow also runs every third day of the month at `21:17 UTC` using the `17 21 */3 * *` schedule and checks every supported `target/subtarget` pair. `microchipsw/lan969x` is temporarily skipped because its Snapshot SDK cannot package `kmod-crypto-xxhash` while `xxhash.ko` is built into the kernel.
 

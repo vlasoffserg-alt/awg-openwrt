@@ -6,8 +6,8 @@
 ![AmneziaWG3.0](https://img.shields.io/badge/AmneziaWG-3.0-orange)
 ![AmneziaWG3.1](https://img.shields.io/badge/AmneziaWG-3.1-red)
 
-![OpenWrt 24](https://img.shields.io/badge/OpenWrt-24.10.4_~_24.10.8-blue)
-![OpenWrt 25](https://img.shields.io/badge/OpenWrt-25.12.0_~_25.12.5-teal)
+![OpenWrt 24](https://img.shields.io/badge/OpenWrt-24.10.0_~_24.10.8-blue)
+![OpenWrt 25](https://img.shields.io/badge/OpenWrt-25.12.0_~_25.12.6-teal)
 
 [![AmneziaWG OpenWrt Feed](https://img.shields.io/badge/AmneziaWG-OpenWrt_Feed-yellow?style=for-the-badge&logo=openwrt)](https://2grey.github.io/awg-openwrt)
 
@@ -15,7 +15,7 @@
 
 В ветке `master` содержится согласованный набор компонентов AWG 3.1:
 
-- `kmod-amneziawg` — `v3.1.20260828`;
+- `kmod-amneziawg` — `v3.1.20261113-02`;
 - `amneziawg-tools` — `v3.1.20260812`;
 - `luci-proto-amneziawg` — `v3.1.1` — веб-интерфейс, а также импорт и экспорт конфигураций AWG 3.1.
 
@@ -35,6 +35,8 @@ AWG 3.0, если оба новых параметра отсутствуют и
 ## Custom package feed (GitHub Pages)
 
 В репозитории также публикуется полнофункциональный [репозиторий пакетов OpenWrt](https://2grey.github.io/awg-openwrt/), включающий подписанные репозитории IPK для OpenWrt 24.x и подписанные репозитории APK для OpenWrt 25.x и более поздних версий.
+
+[Как обновить OpenWrt 24.10 или 25.12 через наш ASU](docs/attended-sysupgrade.md)
 
 ## Установка
 
@@ -57,15 +59,22 @@ AWG 3.0, если оба новых параметра отсутствуют и
     не удаляется.
 
 2. Перезагрузите роутер для загрузки новых модулей ядра
-3. Выполните жесткое обновление страницы LuCI (`Ctrl+F5`) или откройте ее в
-   приватном окне
+3. Очистите браузерный кэш JavaScript LuCI: выполните жесткое обновление
+   страницы (`Ctrl+F5`) или откройте LuCI в приватном окне. Обычной перезагрузки
+   страницы может быть недостаточно
 4. Настройте новый интерфейс с протоколом `AmneziaWG VPN`
 
 ### Через скрипт настройки
 
 Если вам нужно только установить пакеты, используйте скрипт `amneziawg-install` - он автоматически скачает пакеты из этого репозитория под ваше устройство, а также предложит сразу настроить интерфейс с протоколом AmneziaWG.
 
-Если вы согласитесь, потребуется ввести запрошенные параметры конфигурации.  
+Если настроен другой feed `awg-openwrt` (в том числе для старой версии OpenWrt),
+скрипт покажет его адрес и предложит прервать установку, перезаписать feed
+актуальным адресом 2Grey с установкой ключа подписи или продолжить без изменений.
+По умолчанию установка прерывается. При продолжении все настроенные feeds
+проходят обычную проверку доступности.
+
+Если вы согласитесь настроить интерфейс, потребуется ввести запрошенные параметры конфигурации.
 При этом скрипт создаст интерфейс, настроит для него правила фаерволла, а также включит маршрутизацию адресов из AllowedIPs; по умолчанию это весь IPv4- и IPv6-трафик (установит в настройках Peer галочку Route Allowed IPs).
 
 Для запуска скрипта подключитесь к роутеру по SSH, введите команду и следуйте инструкциям на экране.
@@ -74,9 +83,43 @@ AWG 3.0, если оба новых параметра отсутствуют и
 sh <(wget -O - https://raw.githubusercontent.com/2Grey/awg-openwrt/refs/heads/master/amneziawg-install.sh)
 ```
 
+При ошибке скачивания пакета из GitHub Releases установщик автоматически пробует
+`ghproxy.net`, `ghfast.top`, `gh-proxy.com` и `gh-proxy.org` в указанном порядке.
+Для каждого пакета сначала проверяются все источники с расширением текущего
+менеджера пакетов (`.apk` или `.ipk`), затем — с альтернативным расширением.
+Для каждой попытки задан таймаут ожидания ответа 20 секунд.
+
+Через ENV-переменную `AWG_GITHUB_PROXY` можно указать свой HTTP(S) URL-префикс.
+Он будет проверяться **перед прямым скачиванием с GitHub**; если загрузка не
+удастся, установщик продолжит перебор источников. Полная ссылка GitHub
+добавляется после префикса, например
+`https://ghfast.top/https://github.com/2Grey/awg-openwrt/releases/download/...`.
+Это адрес сервиса зеркалирования GitHub, а не HTTP CONNECT/SOCKS-прокси.
+
+Для уже скачанного скрипта:
+
+```sh
+AWG_GITHUB_PROXY='https://ghfast.top/' sh amneziawg-install.sh
+```
+
+Если сам скрипт тоже не скачивается напрямую, загрузите его через зеркало,
+затем запустите с переменной:
+
+```sh
+wget -O /tmp/amneziawg-install.sh \
+  'https://ghfast.top/https://raw.githubusercontent.com/2Grey/awg-openwrt/refs/heads/master/amneziawg-install.sh' &&
+AWG_GITHUB_PROXY='https://ghfast.top/' sh /tmp/amneziawg-install.sh
+```
+
+Переменная влияет только на загрузку пакетов из GitHub Releases этим
+установщиком. Проверка feeds через `apk`/`opkg` использует их настроенные адреса.
+Публичные зеркала управляются третьими лицами; их доступность зависит от сети.
+
 > [!IMPORTANT]
 > При чистой установке скрипт может загрузить модуль ядра и настроить интерфейс без перезагрузки.
 > Если после обновления в памяти остался старый модуль ядра, перезагрузите роутер и повторно запустите скрипт.
+> После обновления пакетов также очистите браузерный кэш JavaScript LuCI:
+> выполните жесткое обновление страницы (`Ctrl+F5`) или откройте LuCI в приватном окне.
 
 Дополнительные флаги скрипта:
 
@@ -133,6 +176,7 @@ sh <(wget -O - https://raw.githubusercontent.com/2Grey/awg-openwrt/refs/heads/ma
 
 #### Список поддерживаемых версий OpenWrt
 
+1. [25.12.6](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.6) – AWG-3.1
 1. [25.12.5](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.5) – AWG-3.1
 2. [25.12.4](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.4) – AWG-3.1
 3. [25.12.3](https://github.com/2Grey/awg-openwrt/releases/tag/v25.12.3) – AWG-3.1
@@ -144,6 +188,10 @@ sh <(wget -O - https://raw.githubusercontent.com/2Grey/awg-openwrt/refs/heads/ma
 9. [24.10.6](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.6) – AWG-3.1
 10. [24.10.5](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.5) – AWG-3.1
 11. [24.10.4](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.4) – AWG-3.1
+12. [24.10.3](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.3) – AWG-3.1
+13. [24.10.2](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.2) – AWG-3.1
+14. [24.10.1](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.1) – AWG-3.1
+15. [24.10.0](https://github.com/2Grey/awg-openwrt/releases/tag/v24.10.0) – AWG-3.1
 
 ## Сборка пакетов
 
@@ -181,6 +229,8 @@ sh <(wget -O - https://raw.githubusercontent.com/2Grey/awg-openwrt/refs/heads/ma
 Workflow **Build OpenWrt Snapshot** проверяет текущую ревизию и ABI ядра OpenWrt Snapshot, собирает APK-пакеты и публикует их как prerelease. Если все четыре пакета для этой ревизии, платформы и ABI уже опубликованы, повторная сборка пропускается.
 
 Для ручного запуска откройте **Actions → Build OpenWrt Snapshot → Run workflow**. Оставьте `target` и `subtarget` пустыми, чтобы собрать все доступные платформы. Для выборочной сборки укажите оба списка через запятую.
+
+Включите **force_rebuild**, чтобы пересобрать пакеты, даже если они уже опубликованы для текущей ревизии и ABI, например после обновления AmneziaWG. Существующие APK в соответствующем prerelease будут заменены. По умолчанию параметр выключен; сборки по расписанию по-прежнему пропускают уже опубликованные наборы пакетов. Для GL-MT6000 укажите `targets: mediatek` и `subtargets: filogic`.
 
 Workflow также запускается каждые три дня месяца в `21:17 UTC` (`01:17` по Самаре) по расписанию `17 21 */3 * *` и проверяет все поддерживаемые пары `target/subtarget`. `microchipsw/lan969x` временно пропускается: его Snapshot SDK не может упаковать `kmod-crypto-xxhash`, поскольку `xxhash.ko` встроен в ядро.
 
